@@ -1,5 +1,6 @@
 package intoroduction.spark.dataframe
 
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.types.DataType._
@@ -7,6 +8,37 @@ import org.apache.spark.sql.types.IntegerType
 
 case class Dessert(menuId: String, name: String, price: Int, kcal: Int)
 
+
+class DesertFrame(sc: SparkContext, sqlContext: SQLContext, filePath: String) {
+  import sqlContext.implicits._
+  lazy val dessertDF = {
+    val dessertRDD = sc.textFile(filePath)
+    sc.textFile(filePath)
+    // データフレームとして読み込む
+    dessertRDD.map { record =>
+      val splitRecord = record.split(",")
+      val menuId = splitRecord(0)
+      val name = splitRecord(1)
+      val price = splitRecord(2).toInt
+      val kcal = splitRecord(3).toInt
+      Dessert(menuId, name, price, kcal)
+    }.toDF
+  }
+  dessertDF.createOrReplaceTempView("desert_table")
+
+
+  def findByMenuId(menuId: String) = {
+    dessertDF.where(dessertDF("menuId") === menuId)
+  }
+
+  def findByHighCalorie(kcal: Int) = {
+    dessertDF.where(dessertDF("kcal") >= kcal).orderBy($"price".asc, $"kcal".desc)
+  }
+
+  def findByHighCorieCount(kcal: Int) = {
+    sqlContext.sql("SELECT count(*) AS num_of_over300Kcal FROM desert_table WHERE kcal >= " + kcal)
+  }
+}
 
 /**
   * 実行コマンド
@@ -21,10 +53,10 @@ object DesertFrame {
 
     val conf = new SparkConf().setAppName("DesertFrame").setMaster("local[*]")
     val sc = new SparkContext(conf)
-    val sqlContext = new org.apache.spark.sql.hive.HiveContext(sc)
+    val sqlContext = new SQLContext(sc)
     import sqlContext.implicits._
 
-    val dessertRDD = sc.textFile("hive/dessert-menu.csv")
+    val dessertRDD = sc.textFile("src/main/hive/dessert-menu.csv")
     // データフレームとして読み込む
     val dessertDF = dessertRDD.map { record =>
       val splitRecord = record.split(",")
